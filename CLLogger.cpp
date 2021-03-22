@@ -7,7 +7,6 @@
 #include "CLLogger.h"
 
 #define LOG_FILE_NAME "CLLogger.txt"
-#define MAX_SIZE 265
 #define BUFFER_SIZE_LOG_FILE 4096
 
 CLLogger* CLLogger::m_pLog = 0;
@@ -48,13 +47,13 @@ CLLogger::CLLogger()
 	}
 }
 
-CLStatus CLLogger::WriteLogMsg(const char *pstrMsg, long lErrorCode)
+CLStatus CLLogger::WriteLogMsg(const struct Table* sTable)
 {
 	CLLogger *pLog = CLLogger::GetInstance();
 	if(pLog == 0)
 		return CLStatus(-1, 0);
 	
-	CLStatus s = pLog->WriteLog(pstrMsg, lErrorCode);
+	CLStatus s = pLog->WriteLog(sTable);
 	if(s.IsSuccess())
 		return CLStatus(0, 0);
 	else
@@ -87,42 +86,35 @@ CLStatus CLLogger::Flush()
 	}
 }
 
-CLStatus CLLogger::WriteMsgAndErrcodeToFile(const char *pstrMsg, const char *pstrErrcode)
+CLStatus CLLogger::WriteMsgAndErrcodeToFile(const struct Table* sTable)
 {
-    if(write(m_Fd, pstrMsg, strlen(pstrMsg)) == -1)
+    if(write(m_Fd, sTable, sizeof(struct Table)) == -1)
 		return CLStatus(-1, errno);
-
-	if(write(m_Fd, pstrErrcode, strlen(pstrErrcode)) == -1)
-		return CLStatus(-1, errno);
-
 	return CLStatus(0, 0);
 }
 
-CLStatus CLLogger::WriteLog(const char *pstrMsg, long lErrorCode)
+CLStatus CLLogger::WriteLog(const struct Table* sTable)
 {
-	if(pstrMsg == 0)
+	if(sTable == 0)
 		return CLStatus(-1, 0);
 
-	if(strlen(pstrMsg) == 0)
+	if(sizeof(*sTable) == 0)
 		return CLStatus(-1, 0);
 
-	char buf[MAX_SIZE];
-	snprintf(buf, MAX_SIZE, "	Error code: %ld\r\n",  lErrorCode);
 
-	int len_strmsg = strlen(pstrMsg);
-	int len_code = strlen(buf);
-	unsigned int total_len = len_strmsg + len_code;
+
+	unsigned int len_strmsg = sizeof(struct Table);
 
 	if(pthread_mutex_lock(m_pMutexForWritingLog) != 0)
 		return CLStatus(-1, 0);
 	
 	try
 	{
-		if((total_len > BUFFER_SIZE_LOG_FILE) || (m_bFlagForProcessExit))
-			throw WriteMsgAndErrcodeToFile(pstrMsg, buf);
+		if((len_strmsg > BUFFER_SIZE_LOG_FILE) || (m_bFlagForProcessExit))
+			throw WriteMsgAndErrcodeToFile(sTable);
 
 		unsigned int nleftroom = BUFFER_SIZE_LOG_FILE - m_nUsedBytesForBuffer;
-		if(total_len > nleftroom)
+		if(len_strmsg > nleftroom)
 		{
 			if(write(m_Fd, m_pLogBuffer, m_nUsedBytesForBuffer) == -1)
 				throw CLStatus(-1, errno);
@@ -130,11 +122,9 @@ CLStatus CLLogger::WriteLog(const char *pstrMsg, long lErrorCode)
 			m_nUsedBytesForBuffer = 0;
 		}
 
-		memcpy(m_pLogBuffer + m_nUsedBytesForBuffer, pstrMsg, len_strmsg);
+		memcpy(m_pLogBuffer + m_nUsedBytesForBuffer, sTable, len_strmsg);
 		m_nUsedBytesForBuffer += len_strmsg;
 
-		memcpy(m_pLogBuffer + m_nUsedBytesForBuffer, buf, len_code);
-		m_nUsedBytesForBuffer += len_code;
 
 		throw CLStatus(0, 0);
 	}
@@ -174,7 +164,7 @@ CLLogger* CLLogger::GetInstance()
 			if(pthread_mutex_unlock(m_pMutexForCreatingLogger) != 0)
 				return 0;
 
-			m_pLog->WriteLog("In CLLogger::GetInstance(), atexit error", errno);
+			printf("注册atexit函数失败\n");
 		}
 		else
 			if(pthread_mutex_unlock(m_pMutexForCreatingLogger) != 0)

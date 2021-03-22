@@ -12,9 +12,10 @@ CLStatus f()
 class A
 {
 public:
+	struct Table sTableA;
 	~A()
 	{
-		CLLogger::WriteLogMsg("in a", 0);
+		CLLogger::WriteLogMsg(&sTableA);
 	}
 };
 
@@ -24,7 +25,7 @@ int main()
 {
 	CLStatus s = f();
 	if(!s.IsSuccess())
-		CLLogger::WriteLogMsg("this is an error", s.m_clErrorCode);
+		//CLLogger::WriteLogMsg("this is an error", s.m_clErrorCode);
 
 	return 0;
 }
